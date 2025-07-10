@@ -219,7 +219,7 @@ def suggest_corrections(query, search_results):
                 with cols[idx % 5]:
                     if movie.get('poster_path'):
                         poster_url = f"https://image.tmdb.org/t/p/w200{movie['poster_path']}"
-                        st.image(poster_url, use_column_width=True)
+                        st.image(poster_url, use_container_width=True)
                     
                     title_display = movie['title']
                     if movie['year']:
@@ -292,7 +292,7 @@ def enhanced_movie_search():
             with cols[idx]:
                 poster_url = f"https://image.tmdb.org/t/p/w200{movie['poster_path']}" if movie.get("poster_path") else None
                 if poster_url:
-                    st.image(poster_url, use_column_width=True)
+                    st.image(poster_url, use_container_width=True)
                 st.write(f"**{movie['label']}**")
                 if st.button("Add Movie", key=f"add_{idx}"):
                     clean_title = movie["label"].split(" (", 1)[0]

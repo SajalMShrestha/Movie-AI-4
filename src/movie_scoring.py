@@ -1,5 +1,5 @@
 """
-Movie recommendation scoring and candidate pool building.
+Enhanced movie recommendation scoring and candidate pool building with multi-page support.
 """
 
 import streamlit as st
@@ -12,6 +12,8 @@ from tmdbv3api import Movie
 from sklearn.cluster import KMeans
 from sklearn.metrics.pairwise import cosine_similarity as sklearn_cosine_similarity
 from sentence_transformers.util import cos_sim
+import time
+import random
 
 from .utils import (
     RECOMMENDATION_WEIGHTS, get_embedding_model, get_mood_score, 
@@ -21,9 +23,10 @@ from .narrative_analysis import infer_narrative_style, infer_mood_from_plot, com
 from .franchise_detection import apply_final_franchise_limit
 from .movie_search import fuzzy_search_movies
 
-def build_custom_candidate_pool(favorite_genre_ids, favorite_cast_ids, favorite_director_ids, favorite_years, tmdb_api_key):
+def build_enhanced_candidate_pool(favorite_genre_ids, favorite_cast_ids, favorite_director_ids, 
+                                favorite_years, tmdb_api_key, target_pool_size=300):
     """
-    Build a pool of 100-200 candidate movies using custom criteria.
+    Build an enhanced pool of candidate movies using multi-page fetching and diverse strategies.
     
     Args:
         favorite_genre_ids: Set of favorite genre IDs
@@ -31,144 +34,349 @@ def build_custom_candidate_pool(favorite_genre_ids, favorite_cast_ids, favorite_
         favorite_director_ids: Set of favorite director IDs
         favorite_years: List of favorite movie years
         tmdb_api_key: TMDB API key
+        target_pool_size: Target size for the candidate pool (default: 300)
     
     Returns:
         Set of candidate movie IDs
     """
     candidate_movie_ids = set()
     
-    # Strategy 1: Discover by Genre (40-60 movies)
-    for genre_id in list(favorite_genre_ids)[:3]:
-        try:
-            url = f"https://api.themoviedb.org/3/discover/movie"
-            params = {
-                "api_key": tmdb_api_key,
-                "with_genres": str(genre_id),
-                "sort_by": "popularity.desc",
-                "vote_count.gte": 50,
-                "page": 1
-            }
-            response = requests.get(url, params=params)
-            if response.status_code == 200:
-                movies = response.json().get("results", [])
-                candidate_movie_ids.update([m["id"] for m in movies[:20]])
-        except Exception as e:
-            st.warning(f"Error discovering by genre {genre_id}: {e}")
+    def safe_api_call(url, params, strategy_name, max_retries=3):
+        """Make API call with retry logic and rate limiting."""
+        for attempt in range(max_retries):
+            try:
+                time.sleep(0.1)  # Rate limiting
+                response = requests.get(url, params=params, timeout=10)
+                if response.status_code == 200:
+                    return response.json()
+                elif response.status_code == 429:  # Rate limited
+                    wait_time = 2 ** attempt
+                    st.warning(f"Rate limited for {strategy_name}, waiting {wait_time}s...")
+                    time.sleep(wait_time)
+                else:
+                    st.warning(f"API error for {strategy_name}: {response.status_code}")
+                    return None
+            except Exception as e:
+                if attempt == max_retries - 1:
+                    st.warning(f"Error in {strategy_name} after {max_retries} attempts: {e}")
+                time.sleep(1)
+        return None
     
-    # Strategy 2: Discover by Cast (30-40 movies)
-    for person_id in list(favorite_cast_ids)[:5]:
-        try:
-            url = f"https://api.themoviedb.org/3/discover/movie"
-            params = {
-                "api_key": tmdb_api_key,
-                "with_cast": str(person_id),
-                "sort_by": "popularity.desc",
-                "vote_count.gte": 30,
-                "page": 1
-            }
-            response = requests.get(url, params=params)
-            if response.status_code == 200:
-                movies = response.json().get("results", [])
-                candidate_movie_ids.update([m["id"] for m in movies[:8]])
-        except Exception as e:
-            st.warning(f"Error discovering by cast {person_id}: {e}")
+    def fetch_multiple_pages(base_url, base_params, strategy_name, pages=3, movies_per_page=20):
+        """Fetch multiple pages for a given strategy."""
+        strategy_movies = set()
+        
+        for page in range(1, pages + 1):
+            params = base_params.copy()
+            params["page"] = page
+            
+            data = safe_api_call(base_url, params, f"{strategy_name} (page {page})")
+            if data and "results" in data:
+                movies = data["results"]
+                strategy_movies.update([m["id"] for m in movies[:movies_per_page]])
+                
+                # Stop if we get fewer results than expected (last page)
+                if len(movies) < 20:
+                    break
+            else:
+                break
+                
+        return strategy_movies
     
-    # Strategy 3: Discover by Directors (20-30 movies)
-    for person_id in list(favorite_director_ids)[:3]:
-        try:
-            url = f"https://api.themoviedb.org/3/discover/movie"
-            params = {
-                "api_key": tmdb_api_key,
-                "with_crew": str(person_id),
-                "sort_by": "popularity.desc", 
-                "vote_count.gte": 30,
-                "page": 1
-            }
-            response = requests.get(url, params=params)
-            if response.status_code == 200:
-                movies = response.json().get("results", [])
-                candidate_movie_ids.update([m["id"] for m in movies[:10]])
-        except Exception as e:
-            st.warning(f"Error discovering by director {person_id}: {e}")
+    # Strategy 1: Enhanced Genre Discovery (60-90 movies)
+    st.write("🎭 Building genre-based candidates...")
+    genre_movies = set()
     
-    # Strategy 4: Year-based Discovery (20-30 movies)
+    for genre_id in list(favorite_genre_ids)[:4]:  # Increased from 3 to 4
+        # High popularity, recent movies
+        base_params = {
+            "api_key": tmdb_api_key,
+            "with_genres": str(genre_id),
+            "sort_by": "popularity.desc",
+            "vote_count.gte": 50,
+            "primary_release_date.gte": "2015-01-01"
+        }
+        recent_movies = fetch_multiple_pages(
+            "https://api.themoviedb.org/3/discover/movie", 
+            base_params, 
+            f"Genre {genre_id} (Recent Popular)", 
+            pages=2
+        )
+        genre_movies.update(recent_movies)
+        
+        # High-rated classics in this genre
+        base_params.update({
+            "sort_by": "vote_average.desc",
+            "vote_count.gte": 200,
+            "vote_average.gte": 7.5,
+            "primary_release_date.gte": "1990-01-01",
+            "primary_release_date.lte": "2020-12-31"
+        })
+        classic_movies = fetch_multiple_pages(
+            "https://api.themoviedb.org/3/discover/movie", 
+            base_params, 
+            f"Genre {genre_id} (Classics)", 
+            pages=2
+        )
+        genre_movies.update(classic_movies)
+    
+    candidate_movie_ids.update(genre_movies)
+    st.write(f"   Added {len(genre_movies)} genre-based movies")
+    
+    # Strategy 2: Enhanced Cast Discovery (50-70 movies)
+    st.write("🎬 Building cast-based candidates...")
+    cast_movies = set()
+    
+    for person_id in list(favorite_cast_ids)[:6]:  # Increased from 5 to 6
+        # Popular movies with this actor
+        base_params = {
+            "api_key": tmdb_api_key,
+            "with_cast": str(person_id),
+            "sort_by": "popularity.desc",
+            "vote_count.gte": 30
+        }
+        popular_cast_movies = fetch_multiple_pages(
+            "https://api.themoviedb.org/3/discover/movie", 
+            base_params, 
+            f"Cast {person_id} (Popular)", 
+            pages=2
+        )
+        cast_movies.update(popular_cast_movies)
+        
+        # Highest-rated movies with this actor
+        base_params.update({
+            "sort_by": "vote_average.desc",
+            "vote_count.gte": 100,
+            "vote_average.gte": 7.0
+        })
+        rated_cast_movies = fetch_multiple_pages(
+            "https://api.themoviedb.org/3/discover/movie", 
+            base_params, 
+            f"Cast {person_id} (Rated)", 
+            pages=1
+        )
+        cast_movies.update(rated_cast_movies)
+    
+    candidate_movie_ids.update(cast_movies)
+    st.write(f"   Added {len(cast_movies)} cast-based movies")
+    
+    # Strategy 3: Enhanced Director Discovery (40-60 movies)
+    st.write("🎯 Building director-based candidates...")
+    director_movies = set()
+    
+    for person_id in list(favorite_director_ids)[:4]:  # Increased from 3 to 4
+        base_params = {
+            "api_key": tmdb_api_key,
+            "with_crew": str(person_id),
+            "sort_by": "popularity.desc",
+            "vote_count.gte": 30
+        }
+        popular_director_movies = fetch_multiple_pages(
+            "https://api.themoviedb.org/3/discover/movie", 
+            base_params, 
+            f"Director {person_id} (Popular)", 
+            pages=2
+        )
+        director_movies.update(popular_director_movies)
+        
+        # Critically acclaimed works
+        base_params.update({
+            "sort_by": "vote_average.desc",
+            "vote_count.gte": 50,
+            "vote_average.gte": 7.0
+        })
+        acclaimed_director_movies = fetch_multiple_pages(
+            "https://api.themoviedb.org/3/discover/movie", 
+            base_params, 
+            f"Director {person_id} (Acclaimed)", 
+            pages=1
+        )
+        director_movies.update(acclaimed_director_movies)
+    
+    candidate_movie_ids.update(director_movies)
+    st.write(f"   Added {len(director_movies)} director-based movies")
+    
+    # Strategy 4: Enhanced Temporal Discovery (40-60 movies)
+    st.write("📅 Building year-based candidates...")
+    temporal_movies = set()
+    
     if favorite_years:
         decades = set()
         for year in favorite_years:
             decade_start = (year // 10) * 10
             decades.add(decade_start)
         
-        for decade_start in list(decades)[:2]:
-            try:
-                url = f"https://api.themoviedb.org/3/discover/movie"
-                params = {
-                    "api_key": tmdb_api_key,
-                    "primary_release_date.gte": f"{decade_start}-01-01",
-                    "primary_release_date.lte": f"{decade_start + 9}-12-31",
-                    "sort_by": "vote_average.desc",
-                    "vote_count.gte": 100,
-                    "page": 1
-                }
-                response = requests.get(url, params=params)
-                if response.status_code == 200:
-                    movies = response.json().get("results", [])
-                    candidate_movie_ids.update([m["id"] for m in movies[:15]])
-            except Exception as e:
-                st.warning(f"Error discovering by decade {decade_start}: {e}")
-    
-    # Strategy 5: Multi-criteria Discovery (20-30 movies)
-    try:
-        top_genres = ",".join(str(id) for id in list(favorite_genre_ids)[:2])
-        top_cast = ",".join(str(id) for id in list(favorite_cast_ids)[:3])
-        
-        if top_genres and top_cast:
-            url = f"https://api.themoviedb.org/3/discover/movie"
-            params = {
+        for decade_start in list(decades)[:3]:  # Increased coverage
+            # Popular movies from this decade
+            base_params = {
                 "api_key": tmdb_api_key,
-                "with_genres": top_genres,
-                "with_cast": top_cast,
+                "primary_release_date.gte": f"{decade_start}-01-01",
+                "primary_release_date.lte": f"{decade_start + 9}-12-31",
                 "sort_by": "popularity.desc",
-                "vote_count.gte": 20,
-                "page": 1
+                "vote_count.gte": 100
             }
-            response = requests.get(url, params=params)
-            if response.status_code == 200:
-                movies = response.json().get("results", [])
-                candidate_movie_ids.update([m["id"] for m in movies[:20]])
+            decade_popular = fetch_multiple_pages(
+                "https://api.themoviedb.org/3/discover/movie", 
+                base_params, 
+                f"Decade {decade_start}s (Popular)", 
+                pages=2
+            )
+            temporal_movies.update(decade_popular)
+            
+            # Highly-rated movies from this decade
+            base_params.update({
+                "sort_by": "vote_average.desc",
+                "vote_count.gte": 200,
+                "vote_average.gte": 7.0
+            })
+            decade_rated = fetch_multiple_pages(
+                "https://api.themoviedb.org/3/discover/movie", 
+                base_params, 
+                f"Decade {decade_start}s (Rated)", 
+                pages=1
+            )
+            temporal_movies.update(decade_rated)
+    
+    candidate_movie_ids.update(temporal_movies)
+    st.write(f"   Added {len(temporal_movies)} temporal-based movies")
+    
+    # Strategy 5: Enhanced Multi-Criteria Discovery (30-50 movies)
+    st.write("🔀 Building multi-criteria candidates...")
+    multi_criteria_movies = set()
+    
+    try:
+        # Combine top genres and cast
+        top_genres = list(favorite_genre_ids)[:2]
+        top_cast = list(favorite_cast_ids)[:3]
+        
+        for genre_combo in range(len(top_genres)):
+            for cast_combo in range(len(top_cast)):
+                base_params = {
+                    "api_key": tmdb_api_key,
+                    "with_genres": str(top_genres[genre_combo]),
+                    "with_cast": str(top_cast[cast_combo]),
+                    "sort_by": "popularity.desc",
+                    "vote_count.gte": 20
+                }
+                combo_movies = fetch_multiple_pages(
+                    "https://api.themoviedb.org/3/discover/movie", 
+                    base_params, 
+                    "Multi-criteria", 
+                    pages=1,
+                    movies_per_page=10
+                )
+                multi_criteria_movies.update(combo_movies)
+                
+                if len(multi_criteria_movies) >= 50:
+                    break
+            if len(multi_criteria_movies) >= 50:
+                break
     except Exception as e:
         st.warning(f"Error with multi-criteria discovery: {e}")
     
-    # Strategy 6: Trending/Popular Backup (10-20 movies)
-    try:
-        url = f"https://api.themoviedb.org/3/trending/movie/week"
-        params = {"api_key": tmdb_api_key}
-        response = requests.get(url, params=params)
-        if response.status_code == 200:
-            movies = response.json().get("results", [])
-            candidate_movie_ids.update([m["id"] for m in movies[:15]])
-    except Exception as e:
-        st.warning(f"Error getting trending movies: {e}")
+    candidate_movie_ids.update(multi_criteria_movies)
+    st.write(f"   Added {len(multi_criteria_movies)} multi-criteria movies")
     
-    # Strategy 7: High-rated movies in favorite genres (backup)
+    # Strategy 6: Enhanced Trending and Awards (30-40 movies)
+    st.write("🔥 Building trending and award-winning candidates...")
+    trending_movies = set()
+    
+    # Current trending
+    data = safe_api_call(
+        "https://api.themoviedb.org/3/trending/movie/week", 
+        {"api_key": tmdb_api_key}, 
+        "Trending Weekly"
+    )
+    if data and "results" in data:
+        trending_movies.update([m["id"] for m in data["results"][:20]])
+    
+    # Award season favorites (high-rated recent releases)
+    base_params = {
+        "api_key": tmdb_api_key,
+        "sort_by": "vote_average.desc",
+        "vote_count.gte": 500,
+        "vote_average.gte": 7.5,
+        "primary_release_date.gte": "2020-01-01"
+    }
+    award_movies = fetch_multiple_pages(
+        "https://api.themoviedb.org/3/discover/movie", 
+        base_params, 
+        "Award Contenders", 
+        pages=2
+    )
+    trending_movies.update(award_movies)
+    
+    candidate_movie_ids.update(trending_movies)
+    st.write(f"   Added {len(trending_movies)} trending/award movies")
+    
+    # Strategy 7: Discovery Serendipity (20-30 movies)
+    st.write("🎲 Building serendipitous discoveries...")
+    serendipity_movies = set()
+    
+    # Random high-quality movies from adjacent genres
+    all_genres = [28, 12, 16, 35, 80, 99, 18, 10751, 14, 36, 27, 10402, 9648, 10749, 878, 10770, 53, 10752, 37]
+    adjacent_genres = [g for g in all_genres if g not in favorite_genre_ids]
+    
+    for genre_id in random.sample(adjacent_genres, min(3, len(adjacent_genres))):
+        base_params = {
+            "api_key": tmdb_api_key,
+            "with_genres": str(genre_id),
+            "sort_by": "vote_average.desc",
+            "vote_count.gte": 300,
+            "vote_average.gte": 7.0
+        }
+        serendipity_genre_movies = fetch_multiple_pages(
+            "https://api.themoviedb.org/3/discover/movie", 
+            base_params, 
+            f"Serendipity Genre {genre_id}", 
+            pages=1,
+            movies_per_page=10
+        )
+        serendipity_movies.update(serendipity_genre_movies)
+    
+    candidate_movie_ids.update(serendipity_movies)
+    st.write(f"   Added {len(serendipity_movies)} serendipitous movies")
+    
+    # Strategy 8: Deep Cuts and Hidden Gems (20-30 movies)
+    st.write("💎 Building hidden gems...")
+    hidden_gems = set()
+    
     for genre_id in list(favorite_genre_ids)[:2]:
-        try:
-            url = f"https://api.themoviedb.org/3/discover/movie"
-            params = {
-                "api_key": tmdb_api_key,
-                "with_genres": str(genre_id),
-                "sort_by": "vote_average.desc",
-                "vote_count.gte": 200,
-                "vote_average.gte": 7.0,
-                "page": 1
-            }
-            response = requests.get(url, params=params)
-            if response.status_code == 200:
-                movies = response.json().get("results", [])
-                candidate_movie_ids.update([m["id"] for m in movies[:10]])
-        except Exception as e:
-            st.warning(f"Error getting high-rated movies for genre {genre_id}: {e}")
+        # Lower popularity but high ratings (hidden gems)
+        base_params = {
+            "api_key": tmdb_api_key,
+            "with_genres": str(genre_id),
+            "sort_by": "vote_average.desc",
+            "vote_count.gte": 100,
+            "vote_count.lte": 1000,  # Not too popular
+            "vote_average.gte": 7.5
+        }
+        gems = fetch_multiple_pages(
+            "https://api.themoviedb.org/3/discover/movie", 
+            base_params, 
+            f"Hidden Gems {genre_id}", 
+            pages=2,
+            movies_per_page=10
+        )
+        hidden_gems.update(gems)
     
-    return candidate_movie_ids
+    candidate_movie_ids.update(hidden_gems)
+    st.write(f"   Added {len(hidden_gems)} hidden gems")
+    
+    # Remove duplicates and apply intelligent limiting
+    final_candidates = list(candidate_movie_ids)
+    
+    # If we have too many candidates, prioritize based on recency and quality
+    if len(final_candidates) > target_pool_size:
+        st.write(f"🎯 Optimizing pool from {len(final_candidates)} to {target_pool_size} movies...")
+        
+        # This would ideally involve fetching basic info and scoring, 
+        # but for now we'll randomly sample to avoid bias
+        final_candidates = random.sample(final_candidates, target_pool_size)
+    
+    st.write(f"✅ Built candidate pool with {len(final_candidates)} movies")
+    
+    return set(final_candidates)
 
 def identify_taste_clusters(favorite_embeddings, favorite_movies_info):
     """
@@ -595,13 +803,15 @@ def recommend_movies(favorite_titles):
     # Build candidate pool and analyze taste
     from tmdbv3api import TMDb
     tmdb = TMDb()
-    candidate_movie_ids = build_custom_candidate_pool(
+    
+    st.write("🔍 Building enhanced candidate movie pool...")
+    candidate_movie_ids = build_enhanced_candidate_pool(
         favorite_genre_ids, favorite_cast_ids, favorite_director_ids, 
-        favorite_years, tmdb.api_key
+        favorite_years, tmdb.api_key, target_pool_size=300
     )
 
-    # Limit candidates
-    candidate_movie_ids = list(candidate_movie_ids)[:150]
+    # Convert to list for processing
+    candidate_movie_ids = list(candidate_movie_ids)
 
     # Analyze taste diversity
     diversity_metrics = analyze_taste_diversity(favorite_embeddings, favorite_genres, favorite_years)

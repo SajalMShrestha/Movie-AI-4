@@ -57,7 +57,7 @@ st.session_state.numeric_session_id = numeric_id
 
 def main():
     """Main application function."""
-    st.title("🎬 Screen or Skip")
+    st.title("🎬 Screen or Skip (S<>S)")
     
     # Movie search section
     search_query = st.text_input(
@@ -100,7 +100,7 @@ def main():
             with cols[idx]:
                 poster_url = f"https://image.tmdb.org/t/p/w200{movie['poster_path']}" if movie.get("poster_path") else None
                 if poster_url:
-                    st.image(poster_url, use_column_width=True)
+                    st.image(poster_url, use_container_width=True)
                 st.write(f"**{movie['label']}**")
                 if st.button("Add Movie", key=f"add_{idx}"):
                     clean_title = movie["label"].split(" (", 1)[0]
@@ -135,7 +135,7 @@ def main():
                 
                 if poster:
                     poster_url = f"https://image.tmdb.org/t/p/w200{poster}"
-                    st.image(poster_url, use_column_width=True)
+                    st.image(poster_url, use_container_width=True)
                 else:
                     st.write("🎬 No poster")
                 
