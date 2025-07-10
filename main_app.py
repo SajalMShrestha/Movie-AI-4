@@ -62,21 +62,6 @@ def main():
     
     # TEMPORARY: Clear corrupted session cache
     if st.button("🔄 Clear Session Cache (Debug)"):
-        # Clear all caches
-        st.cache_data.clear()
-        st.cache_resource.clear()
-        
-        # Clear specific session state items that might be corrupted
-        corrupted_keys = ['movie_details_cache', 'movie_credits_cache', 'fetch_cache', 
-                         'recommendation_cache', 'search_done', 'previous_query']
-        for key in corrupted_keys:
-            if key in st.session_state:
-                if isinstance(st.session_state[key], dict):
-                    st.session_state[key].clear()
-                else:
-                    st.session_state[key] = False if 'done' in key else ""
-        
-        st.success("Session cache cleared!")
         st.rerun()
 
     # Movie search section
