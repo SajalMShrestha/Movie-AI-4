@@ -89,6 +89,18 @@ def main():
                 for m in results[:5]
                 if m.get("title") and m.get("id")
             ]
+
+            # TEMPORARY DEBUG CODE - Remove after fixing
+            if search_results:
+                st.write("🔍 DEBUG: Raw search results:")
+                for i, result in enumerate(search_results):
+                    st.write(f"Result {i}: {result}")
+                st.write("---")
+                # Also show the raw API response
+                st.write("🔍 DEBUG: Raw API response (first result):")
+                if results:
+                    st.write(results[0])
+                st.write("---")
         except Exception as e:
             st.error(f"Error searching for movies: {e}")
 
