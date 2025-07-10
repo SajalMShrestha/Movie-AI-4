@@ -11,7 +11,13 @@ from collections import Counter
 
 # Download required NLTK data
 nltk.download('vader_lexicon', quiet=True)
-nltk.download('punkt', quiet=True)
+
+# Safe auto-download of punkt tokenizer if missing
+try:
+    nltk.data.find('tokenizers/punkt')
+except LookupError:
+    nltk.download('punkt')
+
 nltk.download('averaged_perceptron_tagger', quiet=True)
 nltk.download('stopwords', quiet=True)
 
