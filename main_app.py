@@ -101,7 +101,7 @@ def main():
                         st.session_state["search_done"] = True
                         st.session_state["previous_query"] = ""
                         st.success(f"✅ Added {clean_title}")
-                        st.experimental_rerun()  # ← reruns before messing with session_state
+                        st.rerun()
 
     # Show selected movies section
     if st.session_state.favorite_movies:
