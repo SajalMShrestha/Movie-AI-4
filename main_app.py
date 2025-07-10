@@ -5,6 +5,7 @@ Main Streamlit application for movie recommendations.
 import streamlit as st
 import uuid
 from tmdbv3api import TMDb, Movie
+import requests
 
 # Import our modular components
 from src.movie_search import enhanced_movie_search
@@ -89,39 +90,18 @@ def main():
         st.session_state["search_done"] = False
         st.session_state["previous_query"] = search_query
 
-    search_results = []
+    # Use the refactored search logic
+    search_results = enhanced_movie_search(search_query)
 
-    # Only search if user hasn't just added a movie
-    if search_query and len(search_query) >= 2 and not st.session_state["search_done"]:
-        try:
-            url = "https://api.themoviedb.org/3/search/movie"
-            params = {"api_key": st.secrets["TMDB_API_KEY"], "query": search_query}
-            response = requests.get(url, params=params)
-            data = response.json()
-            results = data.get("results", [])
-            search_results = [
-                {
-                    "label": f"{m.get('title')} ({m.get('release_date')[:4]})" if m.get("release_date") else m.get('title'),
-                    "id": m.get("id"),
-                    "poster_path": m.get("poster_path")
-                }
-                for m in results[:5]
-                if m.get("title") and m.get("id")
-            ]
-
-            # TEMPORARY DEBUG CODE - Remove after fixing
-            if search_results:
-                st.write("🔍 DEBUG: Raw search results:")
-                for i, result in enumerate(search_results):
-                    st.write(f"Result {i}: {result}")
-                st.write("---")
-                # Also show the raw API response
-                st.write("🔍 DEBUG: Raw API response (first result):")
-                if results:
-                    st.write(results[0])
-                st.write("---")
-        except Exception as e:
-            st.error(f"Error searching for movies: {e}")
+    # TEMPORARY DEBUG CODE - Remove after fixing
+    if search_results:
+        st.write("🔍 DEBUG: Raw search results:")
+        for i, result in enumerate(search_results):
+            st.write(f"Result {i}: {result}")
+        st.write("---")
+        # Also show the raw API response
+        # (results variable is now not available, so skip this part or refactor if needed)
+        st.write("---")
 
     # Show Top 5 matches
     if search_results:
@@ -415,5 +395,4 @@ def main():
                             st.success("✅ Your final comments were saved!")
 
 if __name__ == "__main__":
-    import requests  # Add missing import
     main()
