@@ -60,10 +60,6 @@ def main():
     """Main application function."""
     st.title("🎬 Screen or Skip (S<>S)")
     
-    # TEMPORARY: Clear corrupted session cache
-    if st.button("🔄 Clear Session Cache (Debug)"):
-        st.rerun()
-
     # Movie search section
     search_query = st.text_input(
         "Search (Add your 5 favorite movies to get personalized recommendations!)", 
