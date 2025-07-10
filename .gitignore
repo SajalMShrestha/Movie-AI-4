@@ -2,6 +2,9 @@
 __pycache__/
 *.py[cod]
 *.so
+*.pyc
+*.pyo
+*.pyd
 
 # Virtual environments
 .venv/
@@ -9,9 +12,13 @@ env/
 venv/
 venv311/
 
-# Streamlit
-.streamlit/secrets.toml
+# Streamlit (complete directory, not just secrets)
+.streamlit/
 session_state.json
+
+# Session and feedback files that cause cache issues
+session_map.csv
+user_feedback.csv
 
 # Logs and outputs
 *.log
@@ -25,5 +32,11 @@ session_state.json
 firebase-service-account.json
 firebase-adminsdk.json
 
-# MacOS metadata files (optional, but good hygiene)
+# OS metadata files
 .DS_Store
+Thumbs.db
+ehthumbs.db
+
+# Additional cache directories
+.pytest_cache/
+.coverage
