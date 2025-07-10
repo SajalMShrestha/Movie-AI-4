@@ -91,7 +91,7 @@ def main():
         st.session_state["previous_query"] = search_query
 
     # Use the refactored search logic
-    search_results = enhanced_movie_search(search_query)
+    search_results = enhanced_movie_search(search_query, st.secrets["TMDB_API_KEY"])
 
     # TEMPORARY DEBUG CODE - Remove after fixing
     if search_results:
