@@ -93,16 +93,6 @@ def main():
     # Use the refactored search logic
     search_results = enhanced_movie_search(search_query, st.secrets["TMDB_API_KEY"])
 
-    # TEMPORARY DEBUG CODE - Remove after fixing
-    if search_results:
-        st.write("🔍 DEBUG: Raw search results:")
-        for i, result in enumerate(search_results):
-            st.write(f"Result {i}: {result}")
-        st.write("---")
-        # Also show the raw API response
-        # (results variable is now not available, so skip this part or refactor if needed)
-        st.write("---")
-
     # Show Top 5 matches
     if search_results:
         st.markdown("### Top 5 Matches")
