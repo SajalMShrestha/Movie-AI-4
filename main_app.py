@@ -6,6 +6,44 @@ import streamlit as st
 import uuid
 from tmdbv3api import TMDb, Movie
 import requests
+import nltk
+import os
+
+# NLTK Setup - Add this before other imports
+def ensure_nltk_data():
+    """Ensure required NLTK data is downloaded."""
+    try:
+        # Create nltk_data directory in a writable location
+        nltk_data_dir = os.path.expanduser('~/nltk_data')
+        if not os.path.exists(nltk_data_dir):
+            os.makedirs(nltk_data_dir, exist_ok=True)
+        
+        # Add the directory to NLTK's data path
+        if nltk_data_dir not in nltk.data.path:
+            nltk.data.path.append(nltk_data_dir)
+        
+        # Download required NLTK data
+        required_data = ['punkt_tab', 'punkt', 'stopwords', 'vader_lexicon']
+        
+        for data_name in required_data:
+            try:
+                nltk.data.find(f'tokenizers/{data_name}')
+            except LookupError:
+                try:
+                    nltk.download(data_name, download_dir=nltk_data_dir, quiet=True)
+                except Exception:
+                    pass  # Continue if download fails
+            except Exception:
+                try:
+                    nltk.download(data_name, download_dir=nltk_data_dir, quiet=True)
+                except Exception:
+                    pass  # Continue if download fails
+                    
+    except Exception:
+        pass  # Continue if setup fails
+
+# Initialize NLTK data
+ensure_nltk_data()
 
 # Import our modular components
 from src.movie_search import enhanced_movie_search
