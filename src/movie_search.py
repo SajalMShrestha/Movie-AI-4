@@ -219,7 +219,7 @@ def suggest_corrections(query, search_results):
                 with cols[idx % 5]:
                     if movie.get('poster_path'):
                         poster_url = f"https://image.tmdb.org/t/p/w200{movie['poster_path']}"
-                        st.image(poster_url, use_container_width=True)
+                        st.image(poster_url)
                     
                     title_display = movie['title']
                     if movie['year']:
