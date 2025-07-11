@@ -901,16 +901,31 @@ def recommend_movies(favorite_titles, debug=False):
         if movie_obj is None or embedding is None:
             continue
         try:
-            score = compute_score(
+            result = compute_score(
                 movie_obj, cluster_centers, diversity_metrics, favorite_genres, 
                 favorite_actors, user_prefs, trending_scores, favorite_narrative_styles, 
                 candidate_movies
             )
-            
+
+            # Handle both old and new return formats
+            if isinstance(result, tuple):
+                score, breakdown = result
+            else:
+                score = result
+                breakdown = {}
+
             vote_count = getattr(movie_obj, 'vote_count', 0)
             vote_bonus = min(vote_count, 500) / 50000
             score += vote_bonus
-            
+
+            # Store breakdown for debug
+            if debug and isinstance(result, tuple):
+                breakdown['vote_bonus'] = vote_bonus
+                movie_id = getattr(movie_obj, 'id', 0)
+                if not hasattr(recommend_movies, 'score_breakdowns'):
+                    recommend_movies.score_breakdowns = {}
+                recommend_movies.score_breakdowns[movie_id] = breakdown
+
             scored.append((movie_obj, score))
             
         except Exception as e:
