@@ -56,17 +56,24 @@ from src.feedback_system import (
 def debug_score_components(movie, score_components):
     """Debug what's actually contributing to the score"""
     movie_title = getattr(movie, 'title', 'Unknown Title')
-    print(f"\n=== Scoring Debug for {movie_title} ===")
+    st.write(f"\n=== Scoring Debug for {movie_title} ===")
+    
+    # Create a formatted display
+    debug_text = []
     for component, value in score_components.items():
-        print(f"{component}: {value:.4f}")
-    print(f"TOTAL: {sum(score_components.values()):.4f}")
+        debug_text.append(f"{component}: {value:.4f}")
+    
+    total = sum(score_components.values())
+    debug_text.append(f"**TOTAL: {total:.4f}**")
     
     # Show relative contribution
-    total = sum(score_components.values())
     if total > 0:
+        debug_text.append("\nRelative contributions:")
         for component, value in score_components.items():
             pct = (value / total) * 100
-            print(f"{component}: {pct:.1f}% of total score")
+            debug_text.append(f"  • {component}: {pct:.1f}%")
+    
+    st.code("\n".join(debug_text))
 
 # Page configuration
 st.set_page_config(
@@ -191,6 +198,9 @@ def main():
                 st.session_state.recommend_triggered = False
                 st.rerun()
 
+        # Add debug checkbox before the recommendation button
+        debug_scoring = st.checkbox("🐛 Debug scoring (show score breakdowns)", value=False)
+        
         with col2:
             if st.button("🎬 Get Recommendations", type="primary"):
                 if len(st.session_state.favorite_movies) != 5:
@@ -199,7 +209,7 @@ def main():
                     with st.spinner("Finding personalized movie recommendations..."):
                         favorite_titles = [m["title"] for m in st.session_state.favorite_movies if isinstance(m, dict)]
                         try:
-                            recs, candidate_movies = recommend_movies(favorite_titles)
+                            recs, candidate_movies = recommend_movies(favorite_titles, debug=debug_scoring)
                             st.session_state.recommendations = recs
                             st.session_state.candidates = candidate_movies
                             st.session_state.recommend_triggered = True
