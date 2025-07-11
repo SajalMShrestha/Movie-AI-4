@@ -861,6 +861,19 @@ def recommend_movies(favorite_titles, debug=False):
 
     # Get trending scores
     trending_scores = get_trending_popularity(tmdb.api_key)
+    
+    if debug:
+        st.write(f"🔍 **Trending Scores Diagnostic:**")
+        st.write(f"   - Total movies with trending scores: {len(trending_scores)}")
+        
+        # Show movies with non-zero trending scores
+        non_zero_trending = {k: v for k, v in trending_scores.items() if v > 0}
+        st.write(f"   - Movies with non-zero trending: {len(non_zero_trending)}")
+        
+        if non_zero_trending:
+            st.write("   - Non-zero trending movies:")
+            for movie_id, score in list(non_zero_trending.items())[:5]:
+                st.write(f"     Movie ID {movie_id}: {score:.4f}")
 
     # Score all candidate movies
     scored = []
