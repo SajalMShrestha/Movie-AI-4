@@ -625,9 +625,21 @@ def compute_score(m, cluster_centers, diversity_metrics, favorite_genres, favori
             pass
         score_components['age_alignment'] = age_alignment_score
         
-        total_score = sum(score_components.values())
-        
-        return max(total_score, 0), score_components
+        # Calculate total score
+        total_score = max(sum(score_components.values()), 0)
+
+        # Create score breakdown dictionary
+        score_breakdown = {
+            'genre_similarity': RECOMMENDATION_WEIGHTS['genre_similarity'] * (len(genres & favorite_genres) / max(len(favorite_genres),1)),
+            'cast_crew': RECOMMENDATION_WEIGHTS['cast_crew'] * (len(cast_dir & favorite_actors) / max(len(favorite_actors),1)),
+            'ratings': RECOMMENDATION_WEIGHTS['ratings'] * (vote_average/10),
+            'mood_tone': RECOMMENDATION_WEIGHTS['mood_tone'] * get_mood_score(movie_genres, user_prefs['preferred_moods']),
+            'embedding_similarity': embedding_score if 'embedding_score' in locals() else 0,
+            'trending': trending_weight * movie_trend_score if 'trending_weight' in locals() and 'movie_trend_score' in locals() else 0,
+            'recency_bonus': recency_score if 'recency_score' in locals() else 0
+        }
+
+        return total_score, score_breakdown
         
     except Exception as e:
         st.warning(f"Error computing score for movie: {e}")
@@ -889,19 +901,17 @@ def recommend_movies(favorite_titles, debug=False):
         if movie_obj is None or embedding is None:
             continue
         try:
-            score, breakdown = compute_score(  # Now returns tuple
+            score = compute_score(
                 movie_obj, cluster_centers, diversity_metrics, favorite_genres, 
                 favorite_actors, user_prefs, trending_scores, favorite_narrative_styles, 
-                candidate_movies, debug
+                candidate_movies
             )
             
             vote_count = getattr(movie_obj, 'vote_count', 0)
             vote_bonus = min(vote_count, 500) / 50000
             score += vote_bonus
-            breakdown['vote_bonus'] = vote_bonus  # Add vote bonus to breakdown
             
             scored.append((movie_obj, score))
-            score_breakdowns[getattr(movie_obj, 'id', 0)] = breakdown
             
         except Exception as e:
             st.warning(f"Error scoring movie {getattr(movie_obj, 'title', 'Unknown')}: {e}")
@@ -956,6 +966,13 @@ def recommend_movies(favorite_titles, debug=False):
             st.write(f"   - Final score: {s:.4f}")
             st.write(f"   - Trending score: {trending_score:.4f}")
             st.write(f"   - Vote count: {vote_count}")
+            
+            # Show score breakdown
+            if hasattr(recommend_movies, 'score_breakdowns') and movie_id in recommend_movies.score_breakdowns:
+                breakdown = recommend_movies.score_breakdowns[movie_id]
+                st.write("   - **Score breakdown:**")
+                for component, value in breakdown.items():
+                    st.write(f"     • {component}: {value:.4f}")
             
             # Show what year it is for recency bias check
             try:
