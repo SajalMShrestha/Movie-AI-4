@@ -930,6 +930,25 @@ def recommend_movies(favorite_titles, debug=False):
         top.append((movie_title, s))
         used_genres.update(movie_genres)
         
+        # Debug final recommendations as they're selected
+        if debug:
+            movie_id = getattr(m, 'id', 0)
+            trending_score = trending_scores.get(movie_id, 0)
+            st.write(f"🎯 **Recommendation #{len(top)}**: {movie_title}")
+            st.write(f"   - Final score: {s:.4f}")
+            st.write(f"   - Trending score: {trending_score:.4f}")
+            st.write(f"   - Vote count: {vote_count}")
+            
+            # Show what year it is for recency bias check
+            try:
+                release_date = getattr(m, 'release_date', None)
+                if release_date:
+                    year = release_date[:4]
+                    st.write(f"   - Year: {year}")
+            except:
+                pass
+            st.write("---")
+        
         if len(top) == 10: 
             break
 
