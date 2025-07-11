@@ -627,12 +627,13 @@ def compute_score(m, cluster_centers, diversity_metrics, favorite_genres, favori
         st.warning(f"Error computing score for movie: {e}")
         return 0
 
-def recommend_movies(favorite_titles):
+def recommend_movies(favorite_titles, debug=False):
     """
     Main recommendation function that processes user's favorite movies and returns recommendations.
     
     Args:
         favorite_titles: List of user's favorite movie titles
+        debug: Boolean flag to enable debug output for scoring breakdowns
     
     Returns:
         Tuple of (recommendations, candidate_movies)
@@ -875,6 +876,15 @@ def recommend_movies(favorite_titles):
             vote_count = getattr(movie_obj, 'vote_count', 0)
             score += min(vote_count, 500) / 50000
             scored.append((movie_obj, score))
+            
+            # Debug output for first 3 movies
+            if debug and len(scored) < 3:
+                st.write(f"🎯 **{getattr(movie_obj, 'title', 'Unknown')}**: score = {score:.4f}")
+                
+                # Show trending score specifically
+                movie_trend_score = trending_scores.get(getattr(movie_obj, 'id', 0), 0)
+                st.write(f"   - Trending component: {movie_trend_score:.4f}")
+                
         except Exception as e:
             st.warning(f"Error scoring movie {getattr(movie_obj, 'title', 'Unknown')}: {e}")
             continue
