@@ -53,6 +53,21 @@ from src.feedback_system import (
     record_feedback_to_sheet, record_final_comments_to_sheet
 )
 
+def debug_score_components(movie, score_components):
+    """Debug what's actually contributing to the score"""
+    movie_title = getattr(movie, 'title', 'Unknown Title')
+    print(f"\n=== Scoring Debug for {movie_title} ===")
+    for component, value in score_components.items():
+        print(f"{component}: {value:.4f}")
+    print(f"TOTAL: {sum(score_components.values()):.4f}")
+    
+    # Show relative contribution
+    total = sum(score_components.values())
+    if total > 0:
+        for component, value in score_components.items():
+            pct = (value / total) * 100
+            print(f"{component}: {pct:.1f}% of total score")
+
 # Page configuration
 st.set_page_config(
     page_title="Screen or Skip",
