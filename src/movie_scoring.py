@@ -928,6 +928,16 @@ def recommend_movies(favorite_titles, debug=False):
 
             scored.append((movie_obj, score))
             
+            if debug:
+                # Show mood scores for a broader sample
+                movie_genres = getattr(movie_obj, 'genres', [])
+                raw_mood_score = get_mood_score(movie_genres, user_prefs['preferred_moods'])
+                movie_title = getattr(movie_obj, 'title', 'Unknown')
+                
+                # Debug first 20 movies instead of just top 10
+                if len(scored) < 20:
+                    st.write(f"🎭 {movie_title}: raw_mood_score = {raw_mood_score:.3f}")
+            
         except Exception as e:
             st.warning(f"Error scoring movie {getattr(movie_obj, 'title', 'Unknown')}: {e}")
             continue
