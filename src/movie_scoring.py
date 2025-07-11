@@ -476,27 +476,14 @@ def analyze_taste_diversity(favorite_embeddings, favorite_genres, favorite_years
     return diversity_metrics
 
 def compute_score(m, cluster_centers, diversity_metrics, favorite_genres, favorite_actors, 
-                 user_prefs, trending_scores, favorite_narrative_styles, candidate_movies):
+                 user_prefs, trending_scores, favorite_narrative_styles, candidate_movies, debug=False):
     """
     Compute recommendation score for a movie.
-    
-    Args:
-        m: Movie object
-        cluster_centers: Taste cluster centers
-        diversity_metrics: User taste diversity metrics
-        favorite_genres: Set of favorite genres
-        favorite_actors: Set of favorite actors
-        user_prefs: User preferences dictionary
-        trending_scores: Trending popularity scores
-        favorite_narrative_styles: Favorite narrative styles
-        candidate_movies: Dictionary of candidate movies
-    
-    Returns:
-        Float: Recommendation score
+    Returns: (total_score, score_breakdown_dict)
     """
     try:
         narrative = getattr(m, 'narrative_style', {})
-        score = 0.0
+        score_components = {}  # Track each component
         
         # Genre similarity
         genres = set()
@@ -509,7 +496,8 @@ def compute_score(m, cluster_centers, diversity_metrics, favorite_genres, favori
             if name:
                 genres.add(name)
         
-        score += RECOMMENDATION_WEIGHTS['genre_similarity'] * (len(genres & favorite_genres) / max(len(favorite_genres),1))
+        genre_score = RECOMMENDATION_WEIGHTS['genre_similarity'] * (len(genres & favorite_genres) / max(len(favorite_genres),1))
+        score_components['genre_similarity'] = genre_score
         
         # Cast and crew similarity
         cast_names = set()
@@ -526,35 +514,42 @@ def compute_score(m, cluster_centers, diversity_metrics, favorite_genres, favori
         director_names = set(directors) if isinstance(directors, list) else set()
         
         cast_dir = cast_names | director_names
-        score += RECOMMENDATION_WEIGHTS['cast_crew'] * (len(cast_dir & favorite_actors) / max(len(favorite_actors),1))
+        cast_score = RECOMMENDATION_WEIGHTS['cast_crew'] * (len(cast_dir & favorite_actors) / max(len(favorite_actors),1))
+        score_components['cast_crew'] = cast_score
         
         # Release year scoring
+        recency_score = 0
         try:
             release_date = getattr(m, 'release_date', None)
             if release_date:
                 year_diff = datetime.now().year - int(release_date[:4])
-                if year_diff<=2: score += RECOMMENDATION_WEIGHTS['release_year']*0.6
-                elif year_diff<=5: score += RECOMMENDATION_WEIGHTS['release_year']*0.4
-                elif year_diff<=10: score += RECOMMENDATION_WEIGHTS['release_year']*0.25
-                elif year_diff<=20: score += RECOMMENDATION_WEIGHTS['release_year']*0.1
+                if year_diff<=2: recency_score = RECOMMENDATION_WEIGHTS['release_year']*0.6
+                elif year_diff<=5: recency_score = RECOMMENDATION_WEIGHTS['release_year']*0.4
+                elif year_diff<=10: recency_score = RECOMMENDATION_WEIGHTS['release_year']*0.25
+                elif year_diff<=20: recency_score = RECOMMENDATION_WEIGHTS['release_year']*0.1
         except (ValueError, TypeError, AttributeError):
             pass
+        score_components['recency'] = recency_score
         
         # Ratings score
         vote_average = getattr(m, 'vote_average', 0) or 0
-        score += RECOMMENDATION_WEIGHTS['ratings'] * (vote_average/10)
+        ratings_score = RECOMMENDATION_WEIGHTS['ratings'] * (vote_average/10)
+        score_components['ratings'] = ratings_score
         
         # Mood/tone score
         movie_genres = getattr(m, 'genres', [])
-        score += RECOMMENDATION_WEIGHTS['mood_tone'] * get_mood_score(movie_genres, user_prefs['preferred_moods'])
+        mood_score = RECOMMENDATION_WEIGHTS['mood_tone'] * get_mood_score(movie_genres, user_prefs['preferred_moods'])
+        score_components['mood_tone'] = mood_score
 
         # Narrative style score
         plot = getattr(m, 'plot', '') or getattr(m, 'overview', '') or ''
         narrative = infer_narrative_style(plot)
         narrative_match_score = compute_narrative_similarity(narrative, favorite_narrative_styles)
-        score += RECOMMENDATION_WEIGHTS['narrative_style'] * narrative_match_score
+        narrative_score = RECOMMENDATION_WEIGHTS['narrative_style'] * narrative_match_score
+        score_components['narrative_style'] = narrative_score
 
         # Embedding similarity score
+        embedding_score = 0
         movie_id = getattr(m, 'id', None)
         if movie_id and movie_id in candidate_movies:
             candidate_data = candidate_movies[movie_id]
@@ -573,7 +568,8 @@ def compute_score(m, cluster_centers, diversity_metrics, favorite_genres, favori
                     else:
                         embedding_sim_score = 0.0
                 
-                score += RECOMMENDATION_WEIGHTS['embedding_similarity'] * embedding_sim_score
+                embedding_score = RECOMMENDATION_WEIGHTS['embedding_similarity'] * embedding_sim_score
+        score_components['embedding_similarity'] = embedding_score
 
         # Trending factor
         movie_trend_score = trending_scores.get(getattr(m, 'id', 0), 0)
@@ -594,38 +590,48 @@ def compute_score(m, cluster_centers, diversity_metrics, favorite_genres, favori
             else:
                 trending_weight = 0
         
-        score += trending_weight * movie_trend_score
+        trending_score = trending_weight * movie_trend_score
+        score_components['trending'] = trending_score
 
         # Discovery boost for eclectic users
+        discovery_score = 0
         if diversity_metrics['taste_profile'] == 'eclectic':
             if 0.1 < genre_overlap_score < 0.5:
-                score += RECOMMENDATION_WEIGHTS['discovery_boost'] * 1.5
+                discovery_score = RECOMMENDATION_WEIGHTS['discovery_boost'] * 1.5
+        score_components['discovery_boost'] = discovery_score
 
         # Age penalty for very old movies
+        age_penalty = 0
         try:
             if release_date:
                 release_year = int(release_date[:4])
                 if datetime.now().year - release_year > 20:
-                    score -= 0.03
+                    age_penalty = -0.03
         except (ValueError, TypeError):
             pass
+        score_components['age_penalty'] = age_penalty
 
         # Age alignment scoring
+        age_alignment_score = 0
         try:
             if release_date:
                 release_year = int(release_date[:4])
                 user_age_at_release = user_prefs['estimated_age'] - (datetime.now().year - release_year)
                 if 15 <= user_age_at_release <= 25:
-                    score += RECOMMENDATION_WEIGHTS['age_alignment']
+                    age_alignment_score = RECOMMENDATION_WEIGHTS['age_alignment']
                 elif 10 <= user_age_at_release < 15 or 25 < user_age_at_release <= 30:
-                    score += RECOMMENDATION_WEIGHTS['age_alignment'] * 0.5
+                    age_alignment_score = RECOMMENDATION_WEIGHTS['age_alignment'] * 0.5
         except (ValueError, TypeError):
             pass
-            
-        return max(score, 0)
+        score_components['age_alignment'] = age_alignment_score
+        
+        total_score = sum(score_components.values())
+        
+        return max(total_score, 0), score_components
+        
     except Exception as e:
         st.warning(f"Error computing score for movie: {e}")
-        return 0
+        return 0, {}
 
 def recommend_movies(favorite_titles, debug=False):
     """
@@ -877,27 +883,26 @@ def recommend_movies(favorite_titles, debug=False):
 
     # Score all candidate movies
     scored = []
+    score_breakdowns = {}  # Store breakdowns for debug
+
     for movie_obj, embedding in candidate_movies.values():
         if movie_obj is None or embedding is None:
             continue
         try:
-            score = compute_score(
+            score, breakdown = compute_score(  # Now returns tuple
                 movie_obj, cluster_centers, diversity_metrics, favorite_genres, 
                 favorite_actors, user_prefs, trending_scores, favorite_narrative_styles, 
-                candidate_movies
+                candidate_movies, debug
             )
-            vote_count = getattr(movie_obj, 'vote_count', 0)
-            score += min(vote_count, 500) / 50000
-            scored.append((movie_obj, score))
             
-            # Debug output for first 3 movies
-            if debug and len(scored) < 3:
-                st.write(f"🎯 **{getattr(movie_obj, 'title', 'Unknown')}**: score = {score:.4f}")
-                
-                # Show trending score specifically
-                movie_trend_score = trending_scores.get(getattr(movie_obj, 'id', 0), 0)
-                st.write(f"   - Trending component: {movie_trend_score:.4f}")
-                
+            vote_count = getattr(movie_obj, 'vote_count', 0)
+            vote_bonus = min(vote_count, 500) / 50000
+            score += vote_bonus
+            breakdown['vote_bonus'] = vote_bonus  # Add vote bonus to breakdown
+            
+            scored.append((movie_obj, score))
+            score_breakdowns[getattr(movie_obj, 'id', 0)] = breakdown
+            
         except Exception as e:
             st.warning(f"Error scoring movie {getattr(movie_obj, 'title', 'Unknown')}: {e}")
             continue
