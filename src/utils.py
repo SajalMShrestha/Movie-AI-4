@@ -11,16 +11,16 @@ import torch
 
 # Global configuration constants
 RECOMMENDATION_WEIGHTS = {
-    "mood_tone": 0.15,
-    "genre_similarity": 0.10,
-    "cast_crew": 0.10,
-    "narrative_style": 0.08,
-    "ratings": 0.05,
-    "trending_factor": 0.07,
-    "release_year": 0.05,
-    "discovery_boost": 0.05,
-    "age_alignment": 0.0,
-    "embedding_similarity": 0.35
+    "embedding_similarity": 0.30,  # Reduce from 35%
+    "mood_tone": 0.15,             # Keep as gate
+    "trending_factor": 0.12,       # Increase from 7%
+    "genre_similarity": 0.12,     # Increase from 10%
+    "cast_crew": 0.10,             # Keep same
+    "narrative_style": 0.08,       # Keep same
+    "ratings": 0.08,               # Increase from 5%
+    "release_year": 0.05,          # Keep same
+    "discovery_boost": 0.00,       # Remove (was 5%)
+    "age_alignment": 0.00          # Keep same
 }
 
 STREAMING_PLATFORM_PRIORITY = {
