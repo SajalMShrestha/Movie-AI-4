@@ -523,10 +523,10 @@ def compute_score(m, cluster_centers, diversity_metrics, favorite_genres, favori
             release_date = getattr(m, 'release_date', None)
             if release_date:
                 year_diff = datetime.now().year - int(release_date[:4])
-                if year_diff<=2: recency_score = RECOMMENDATION_WEIGHTS['release_year']*0.6
-                elif year_diff<=5: recency_score = RECOMMENDATION_WEIGHTS['release_year']*0.4
-                elif year_diff<=10: recency_score = RECOMMENDATION_WEIGHTS['release_year']*0.25
-                elif year_diff<=20: recency_score = RECOMMENDATION_WEIGHTS['release_year']*0.1
+                if year_diff<=2: recency_score = RECOMMENDATION_WEIGHTS['release_year']*0.2
+                elif year_diff<=5: recency_score = RECOMMENDATION_WEIGHTS['release_year']*0.1
+                elif year_diff<=10: recency_score = RECOMMENDATION_WEIGHTS['release_year']*0.05
+                elif year_diff<=20: recency_score = RECOMMENDATION_WEIGHTS['release_year']*0.02
         except (ValueError, TypeError, AttributeError):
             pass
         score_components['recency'] = recency_score
