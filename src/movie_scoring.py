@@ -476,7 +476,7 @@ def analyze_taste_diversity(favorite_embeddings, favorite_genres, favorite_years
     return diversity_metrics
 
 def compute_score(m, cluster_centers, diversity_metrics, favorite_genres, favorite_actors, 
-                 user_prefs, trending_scores, favorite_narrative_styles, candidate_movies, debug=False):
+                 user_prefs, trending_scores, favorite_narrative_styles, candidate_movies, normalized_embedding_scores=None):
     """
     Compute recommendation score for a movie.
     Returns: (total_score, score_breakdown_dict)
@@ -551,7 +551,11 @@ def compute_score(m, cluster_centers, diversity_metrics, favorite_genres, favori
         # Embedding similarity score
         embedding_score = 0
         movie_id = getattr(m, 'id', None)
-        if movie_id and movie_id in candidate_movies:
+        
+        # Use normalized embedding scores if available
+        if normalized_embedding_scores and movie_id in normalized_embedding_scores:
+            embedding_score = RECOMMENDATION_WEIGHTS['embedding_similarity'] * normalized_embedding_scores[movie_id]
+        elif movie_id and movie_id in candidate_movies:
             candidate_data = candidate_movies[movie_id]
             if len(candidate_data) >= 2 and candidate_data[1] is not None:
                 candidate_embedding = candidate_data[1]
@@ -893,9 +897,54 @@ def recommend_movies(favorite_titles, debug=False):
             for movie_id, score in list(non_zero_trending.items())[:5]:
                 st.write(f"     Movie ID {movie_id}: {score:.4f}")
 
-    # Score all candidate movies
+    # STEP 1: First pass - collect all raw embedding similarities
+    raw_embedding_scores = {}
+    for movie_obj, embedding in candidate_movies.values():
+        if movie_obj is None or embedding is None:
+            continue
+        
+        movie_id = getattr(movie_obj, 'id', None)
+        if movie_id and movie_id in candidate_movies:
+            candidate_data = candidate_movies[movie_id]
+            if len(candidate_data) >= 2 and candidate_data[1] is not None:
+                candidate_embedding = candidate_data[1]
+                
+                # Calculate raw embedding similarity
+                if cluster_centers and diversity_metrics['taste_profile'] in ['diverse', 'eclectic']:
+                    raw_embedding_sim = compute_multi_cluster_similarity(candidate_embedding, cluster_centers)
+                else:
+                    if hasattr(user_prefs, 'favorite_embeddings') and user_prefs['favorite_embeddings']:
+                        avg_embedding = torch.mean(torch.stack(user_prefs['favorite_embeddings']), dim=0)
+                        raw_embedding_sim = float(cos_sim(candidate_embedding, avg_embedding))
+                    else:
+                        raw_embedding_sim = 0.0
+                
+                raw_embedding_scores[movie_id] = raw_embedding_sim
+
+    # STEP 2: Normalize embedding scores to 0-1 range
+    if raw_embedding_scores:
+        all_embedding_scores = list(raw_embedding_scores.values())
+        min_emb, max_emb = min(all_embedding_scores), max(all_embedding_scores)
+        
+        # Avoid division by zero
+        if max_emb > min_emb:
+            normalized_embedding_scores = {
+                movie_id: (raw_score - min_emb) / (max_emb - min_emb) 
+                for movie_id, raw_score in raw_embedding_scores.items()
+            }
+        else:
+            normalized_embedding_scores = {movie_id: 0.5 for movie_id in raw_embedding_scores.keys()}
+        
+        if debug:
+            st.write(f"🔧 **Embedding Normalization:**")
+            st.write(f"   - Raw range: {min_emb:.4f} to {max_emb:.4f}")
+            st.write(f"   - Normalized range: 0.0000 to 1.0000")
+    else:
+        normalized_embedding_scores = {}
+
+    # STEP 3: Second pass - compute final scores with normalized embeddings
     scored = []
-    score_breakdowns = {}  # Store breakdowns for debug
+    score_breakdowns = {}
 
     for movie_obj, embedding in candidate_movies.values():
         if movie_obj is None or embedding is None:
@@ -904,7 +953,7 @@ def recommend_movies(favorite_titles, debug=False):
             result = compute_score(
                 movie_obj, cluster_centers, diversity_metrics, favorite_genres, 
                 favorite_actors, user_prefs, trending_scores, favorite_narrative_styles, 
-                candidate_movies
+                candidate_movies, normalized_embedding_scores  # Pass normalized scores
             )
 
             # Handle both old and new return formats
