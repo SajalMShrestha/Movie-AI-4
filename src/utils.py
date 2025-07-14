@@ -35,12 +35,12 @@ STREAMING_PLATFORM_PRIORITY = {
 }
 
 MOOD_TONE_MAP = {
-    "feel_good": {"Comedy", "Romance", "Music", "Adventure"},
-    "gritty": {"Crime", "Thriller", "Mystery", "Drama"},
-    "cerebral": {"Sci-Fi", "Mystery", "History"},
-    "intense": {"Action", "War", "Horror"},
-    "melancholic": {"Drama", "History"},
-    "classic": {"Western", "Film-Noir"}
+    "uplifting": {"Comedy", "Romance", "Music", "Adventure", "Family"},
+    "dark_gritty": {"Crime", "Thriller", "Mystery"},
+    "thought_provoking": {"Science Fiction", "Documentary"},
+    "high_intensity": {"Action", "War", "Horror"},
+    "emotional": {"Drama"},
+    "nostalgic": {"Western", "History"}
 }
 
 @st.cache_resource
