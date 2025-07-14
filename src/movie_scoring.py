@@ -999,6 +999,11 @@ def recommend_movies(favorite_titles, debug=False):
     used_genres = set()
     favorite_titles_set = {title.lower() for title in favorite_titles}
 
+    def calculate_genre_overlap(movie_genres, used_genres):
+        """Helper to calculate genre overlap penalty."""
+        overlap_count = len(movie_genres & used_genres)
+        return overlap_count / max(len(movie_genres), 1)
+
     for m, s in scored:
         vote_count = getattr(m, 'vote_count', 0)
         movie_title = getattr(m, 'title', 'Unknown Title')
@@ -1018,7 +1023,23 @@ def recommend_movies(favorite_titles, debug=False):
             if name:
                 movie_genres.add(name)
         
-        # For eclectic users, ensure genre diversity
+        # Calculate final score with diversity penalty
+        final_score = s
+        
+        # Apply diversity enforcement after first 5 selections
+        if len(top) > 5:
+            genre_overlap_penalty = calculate_genre_overlap(movie_genres, used_genres)
+            final_score = s - (genre_overlap_penalty * 0.1)
+            
+            if debug:
+                st.write(f"🎨 **Diversity Check for {movie_title}:**")
+                st.write(f"   - Movie genres: {list(movie_genres)}")
+                st.write(f"   - Used genres: {list(used_genres)}")
+                st.write(f"   - Overlap penalty: {genre_overlap_penalty:.3f}")
+                st.write(f"   - Original score: {s:.4f}")
+                st.write(f"   - Final score: {final_score:.4f}")
+        
+        # For eclectic users, ensure genre diversity (keep existing logic)
         if diversity_metrics['taste_profile'] == 'eclectic' and len(top) >= 3:
             genre_overlap = len(movie_genres & used_genres) / max(len(movie_genres), 1)
             if genre_overlap > 0.7:
@@ -1029,7 +1050,7 @@ def recommend_movies(favorite_titles, debug=False):
                 continue
             low_votes += 1
         
-        top.append((movie_title, s))
+        top.append((movie_title, final_score))
         used_genres.update(movie_genres)
         
         # Debug final recommendations as they're selected
@@ -1037,7 +1058,7 @@ def recommend_movies(favorite_titles, debug=False):
             movie_id = getattr(m, 'id', 0)
             trending_score = trending_scores.get(movie_id, 0)
             st.write(f"🎯 **Recommendation #{len(top)}**: {movie_title}")
-            st.write(f"   - Final score: {s:.4f}")
+            st.write(f"   - Final score: {final_score:.4f}")
             st.write(f"   - Trending score: {trending_score:.4f}")
             st.write(f"   - Vote count: {vote_count}")
             
