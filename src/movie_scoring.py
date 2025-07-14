@@ -1029,7 +1029,7 @@ def recommend_movies(favorite_titles, debug=False):
         # Apply diversity enforcement after first 5 selections
         if len(top) > 5:
             genre_overlap_penalty = calculate_genre_overlap(movie_genres, used_genres)
-            final_score = s - (genre_overlap_penalty * 0.1)
+            final_score = s - (genre_overlap_penalty * 0.05)
             
             if debug:
                 st.write(f"🎨 **Diversity Check for {movie_title}:**")
