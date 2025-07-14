@@ -14,13 +14,13 @@ RECOMMENDATION_WEIGHTS = {
     "mood_tone": 0.15,
     "genre_similarity": 0.10,
     "cast_crew": 0.10,
-    "narrative_style": 0.08,
+    "narrative_style": 0.10,       # Increased from 0.08
     "ratings": 0.05,
     "trending_factor": 0.07,
     "release_year": 0.05,
-    "discovery_boost": 0.05,
+    "discovery_boost": 0.10,       # Increased from 0.05
     "age_alignment": 0.0,
-    "embedding_similarity": 0.35
+    "embedding_similarity": 0.28    # Reduced from 0.35
 }
 
 STREAMING_PLATFORM_PRIORITY = {
