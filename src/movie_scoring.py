@@ -27,7 +27,7 @@ def build_enhanced_candidate_pool(favorite_genre_ids, favorite_cast_ids, favorit
                                 favorite_years, tmdb_api_key, target_pool_size=300):
     """
     Build an enhanced pool of candidate movies using multi-page fetching and diverse strategies.
-    
+            
     Args:
         favorite_genre_ids: Set of favorite genre IDs
         favorite_cast_ids: Set of favorite cast member IDs
@@ -1030,7 +1030,7 @@ def recommend_movies(favorite_titles, debug=False):
         # Apply diversity enforcement after first 5 selections
         if len(top) > 5:
             genre_overlap_penalty = calculate_genre_overlap(movie_genres, used_genres)
-            final_score = s - (genre_overlap_penalty * 0.02)
+            final_score = s - (genre_overlap_penalty * 0.015)
             
             if debug:
                 st.write(f"🎨 **Diversity Check for {movie_title}:**")
