@@ -164,7 +164,7 @@ def build_enhanced_candidate_pool(favorite_genre_ids, favorite_cast_ids, favorit
     st.write("🎯 Building director-based candidates...")
     director_movies = set()
     
-    for person_id in list(favorite_director_ids)[:4]:  # Increased from 3 to 4
+    for person_id in list(favorite_director_ids)[:7]:  # Increased from 4 to 7
         base_params = {
             "api_key": tmdb_api_key,
             "with_crew": str(person_id),
@@ -1030,7 +1030,7 @@ def recommend_movies(favorite_titles, debug=False):
         # Apply diversity enforcement after first 5 selections
         if len(top) > 5:
             genre_overlap_penalty = calculate_genre_overlap(movie_genres, used_genres)
-            final_score = s - (genre_overlap_penalty * 0.05)
+            final_score = s - (genre_overlap_penalty * 0.02)
             
             if debug:
                 st.write(f"🎨 **Diversity Check for {movie_title}:**")
@@ -1046,8 +1046,14 @@ def recommend_movies(favorite_titles, debug=False):
             if genre_overlap > 0.7:
                 continue
         
-        if vote_count < 100:
-            if low_votes >= 2: 
+        # Allow more recent quality films, but still maintain some vote standards
+        if vote_count < 50:  # Lower threshold for quality films
+            if low_votes >= 4:  # Allow up to 4 instead of 2
+                continue
+            low_votes += 1
+        elif vote_count < 100:
+            # For films with 50-99 votes, be less restrictive
+            if low_votes >= 6:  # More generous for decent vote counts
                 continue
             low_votes += 1
         
