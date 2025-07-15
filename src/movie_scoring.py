@@ -17,7 +17,7 @@ import random
 
 from .utils import (
     RECOMMENDATION_WEIGHTS, get_embedding_model, get_mood_score, 
-    get_trending_popularity, estimate_user_age, fetch_similar_movie_details
+    get_trending_popularity, estimate_user_age, fetch_similar_movie_details, calculate_user_mood_preferences
 )
 from .narrative_analysis import infer_narrative_style, infer_mood_from_plot, compute_narrative_similarity
 from .franchise_detection import apply_final_franchise_limit
