@@ -58,6 +58,8 @@ def get_mood_score(genres, preferred_moods):
                 if genre_name in tags:
                     matched_moods.add(mood)
     overlap = matched_moods & preferred_moods
+    # Logging for debugging
+    print(f"Genres: {genres} → mood_tone = {matched_moods}")
     return len(overlap) / max(len(preferred_moods), 1)
 
 def fetch_similar_movie_details(m_id, fetch_cache=None):
