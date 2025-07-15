@@ -35,32 +35,74 @@ STREAMING_PLATFORM_PRIORITY = {
 }
 
 MOOD_TONE_MAP = {
-    "uplifting": {"Comedy", "Romance", "Music", "Adventure", "Family"},
-    "dark_gritty": {"Crime", "Thriller", "Mystery"},
-    "thought_provoking": {"Science Fiction", "Documentary"},
-    "high_intensity": {"Action", "War", "Horror"},
-    "emotional": {"Drama"},
-    "nostalgic": {"Western", "History"}
+    "uplifting": {"Comedy", "Romance", "Music", "Adventure", "Family", "Animation"},
+    "dark_gritty": {"Crime", "Thriller", "Mystery", "Horror"},
+    "thought_provoking": {"Science Fiction", "Documentary", "History", "Fantasy"},
+    "high_intensity": {"Action", "War", "Horror", "Thriller"},
+    "emotional": {"Drama", "Romance", "History", "War"},
+    "nostalgic": {"Western", "History", "War"},
+    "neutral": {"TV Movie"}
 }
+
+def calculate_user_mood_preferences(favorite_movies_info):
+    """Calculate user's mood preferences dynamically from their favorites."""
+    mood_counts = {}
+    total_movies = len(favorite_movies_info)
+    
+    if total_movies == 0:
+        return {"uplifting": 0.5, "emotional": 0.3, "high_intensity": 0.2}
+    
+    for movie_info in favorite_movies_info:
+        movie_genres = set(movie_info.get('genres', []))
+        
+        for mood, genre_set in MOOD_TONE_MAP.items():
+            if movie_genres & genre_set:
+                mood_counts[mood] = mood_counts.get(mood, 0) + 1
+    
+    # Convert counts to normalized weights
+    mood_weights = {}
+    for mood, count in mood_counts.items():
+        mood_weights[mood] = count / total_movies
+    
+    # Ensure all moods have minimal weight for discovery
+    for mood in MOOD_TONE_MAP.keys():
+        if mood not in mood_weights:
+            mood_weights[mood] = 0.05
+    
+    return mood_weights
+
+def get_mood_score(genres, user_mood_weights):
+    """Calculate mood score using dynamic user preferences."""
+    if not user_mood_weights:
+        return 0.5
+    
+    movie_moods = set()
+    genre_names = set()
+    
+    # Extract genre names
+    for g in genres:
+        genre_name = g.get('name', '') if isinstance(g, dict) else getattr(g, 'name', '')
+        if genre_name:
+            genre_names.add(genre_name)
+    
+    # Find matching moods
+    for mood, genre_set in MOOD_TONE_MAP.items():
+        if genre_names & genre_set:
+            movie_moods.add(mood)
+    
+    if not movie_moods:
+        return 0.1
+    
+    # Calculate average preference across matched moods
+    total_preference = sum(user_mood_weights.get(mood, 0.05) for mood in movie_moods)
+    base_score = total_preference / len(movie_moods)
+    
+    return min(base_score, 1.0)
 
 @st.cache_resource
 def get_embedding_model():
     """Get the sentence transformer model for embeddings."""
     return SentenceTransformer('all-MiniLM-L6-v2', device='cpu')
-
-def get_mood_score(genres, preferred_moods):
-    """Calculate mood score based on genre overlap with preferred moods."""
-    matched_moods = set()
-    for g in genres:
-        genre_name = g.get('name', '') if isinstance(g, dict) else getattr(g, 'name', '')
-        if genre_name:
-            for mood, tags in MOOD_TONE_MAP.items():
-                if genre_name in tags:
-                    matched_moods.add(mood)
-    overlap = matched_moods & preferred_moods
-    # Logging for debugging
-    print(f"Genres: {genres} → mood_tone = {matched_moods}")
-    return len(overlap) / max(len(preferred_moods), 1)
 
 def fetch_similar_movie_details(m_id, fetch_cache=None):
     """
