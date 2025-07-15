@@ -538,7 +538,7 @@ def compute_score(m, cluster_centers, diversity_metrics, favorite_genres, favori
         
         # Mood/tone score
         movie_genres = getattr(m, 'genres', [])
-        mood_score = RECOMMENDATION_WEIGHTS['mood_tone'] * get_mood_score(movie_genres, user_prefs['preferred_moods'])
+        mood_score = RECOMMENDATION_WEIGHTS['mood_tone'] * get_mood_score(movie_genres, user_prefs['mood_weights'])
         score_components['mood_tone'] = mood_score
 
         # Narrative style score
@@ -577,7 +577,7 @@ def compute_score(m, cluster_centers, diversity_metrics, favorite_genres, favori
 
         # Trending factor
         movie_trend_score = trending_scores.get(getattr(m, 'id', 0), 0)
-        mood_match_score = get_mood_score(movie_genres, user_prefs['preferred_moods'])
+        mood_match_score = get_mood_score(movie_genres, user_prefs['mood_weights'])
         genre_overlap_score = len(genres & favorite_genres) / max(len(favorite_genres), 1)
 
         # Adjust trending boost based on taste diversity
@@ -637,7 +637,7 @@ def compute_score(m, cluster_centers, diversity_metrics, favorite_genres, favori
             'genre_similarity': RECOMMENDATION_WEIGHTS['genre_similarity'] * (len(genres & favorite_genres) / max(len(favorite_genres),1)),
             'cast_crew': RECOMMENDATION_WEIGHTS['cast_crew'] * (len(cast_dir & favorite_actors) / max(len(favorite_actors),1)),
             'ratings': RECOMMENDATION_WEIGHTS['ratings'] * (vote_average/10),
-            'mood_tone': RECOMMENDATION_WEIGHTS['mood_tone'] * get_mood_score(movie_genres, user_prefs['preferred_moods']),
+            'mood_tone': RECOMMENDATION_WEIGHTS['mood_tone'] * get_mood_score(movie_genres, user_prefs['mood_weights']),
             'embedding_similarity': embedding_score if 'embedding_score' in locals() else 0,
             'trending': trending_weight * movie_trend_score if 'trending_weight' in locals() and 'movie_trend_score' in locals() else 0,
             'recency_bonus': recency_score if 'recency_score' in locals() else 0
@@ -843,8 +843,9 @@ def recommend_movies(favorite_titles, debug=False):
     cluster_centers, cluster_labels = identify_taste_clusters(favorite_embeddings, favorite_movies_info)
 
     # Set up user preferences
+    user_mood_weights = calculate_user_mood_preferences(favorite_movies_info)
     user_prefs = {
-        "preferred_moods": plot_moods,
+        "mood_weights": user_mood_weights,
         "estimated_age": estimate_user_age(favorite_years),
         "taste_diversity": diversity_metrics,
         "favorite_embeddings": favorite_embeddings
@@ -980,7 +981,7 @@ def recommend_movies(favorite_titles, debug=False):
             if debug:
                 # Show mood scores for a broader sample
                 movie_genres = getattr(movie_obj, 'genres', [])
-                raw_mood_score = get_mood_score(movie_genres, user_prefs['preferred_moods'])
+                raw_mood_score = get_mood_score(movie_genres, user_prefs['mood_weights'])
                 movie_title = getattr(movie_obj, 'title', 'Unknown')
                 
                 # Debug first 20 movies instead of just top 10
